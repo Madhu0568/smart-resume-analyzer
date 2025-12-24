@@ -34,6 +34,7 @@ smart-resume-analyzer/
 ## ▶️ How to Run the Project
 
 ### Step 1: Clone the repository
+https://github.com/Madhu0568/smart-resume-analyzer
 
 ### Step 2: Navigate to the project folder
 
