@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Resume Analyzer & Job Matcher</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0d1117; color: #c9d1d9; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; color: #58a6ff; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #8b949e; margin-bottom: 25px; }
+        .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .input-group { background: #161b22; border-radius: 10px; padding: 20px; border: 1px solid #30363d; }
+        .input-group h3 { color: #58a6ff; margin-bottom: 10px; }
+        textarea { width: 100%; height: 200px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px; color: #c9d1d9; padding: 12px; font-family: inherit; font-size: 0.9em; resize: vertical; }
+        textarea:focus { outline: none; border-color: #58a6ff; }
+        .btn-row { display: flex; gap: 10px; justify-content: center; margin-bottom: 25px; }
+        button { padding: 12px 28px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1em; transition: all 0.2s; }
+        .btn-match { background: #238636; color: white; }
+        .btn-analyze { background: #1f6feb; color: white; }
+        .btn-sample { background: #30363d; color: #c9d1d9; }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+        .results { background: #161b22; border-radius: 10px; padding: 25px; border: 1px solid #30363d; display: none; }
+        .results.visible { display: block; }
+        .score-display { text-align: center; margin-bottom: 20px; }
+        .score-circle { display: inline-flex; align-items: center; justify-content: center; width: 120px; height: 120px; border-radius: 50%; font-size: 2.5em; font-weight: bold; }
+        .score-high { background: rgba(35, 134, 54, 0.2); border: 3px solid #238636; color: #3fb950; }
+        .score-medium { background: rgba(210, 153, 34, 0.2); border: 3px solid #d29922; color: #e3b341; }
+        .score-low { background: rgba(248, 81, 73, 0.2); border: 3px solid #f85149; color: #f85149; }
+        .recommendation { text-align: center; font-size: 1.1em; margin: 10px 0 20px; color: #8b949e; }
+        .skills-section { margin-bottom: 15px; }
+        .skills-section h3 { color: #58a6ff; margin-bottom: 8px; font-size: 1em; }
+        .skill-tag { display: inline-block; padding: 4px 12px; border-radius: 15px; margin: 3px; font-size: 0.85em; font-weight: 500; }
+        .tag-matched { background: rgba(35, 134, 54, 0.2); color: #3fb950; border: 1px solid #238636; }
+        .tag-missing { background: rgba(248, 81, 73, 0.2); color: #f85149; border: 1px solid #f85149; }
+        .tag-extra { background: rgba(31, 111, 235, 0.2); color: #58a6ff; border: 1px solid #1f6feb; }
+        @media (max-width: 768px) { .input-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <h1>Smart Resume Analyzer</h1>
+    <p class="subtitle">NLP-Powered Resume Analysis & Job Matching Engine</p>
+
+    <div class="input-grid">
+        <div class="input-group">
+            <h3>Resume Text</h3>
+            <textarea id="resume" placeholder="Paste your resume text here..."></textarea>
+        </div>
+        <div class="input-group">
+            <h3>Job Description</h3>
+            <textarea id="job-desc" placeholder="Paste the job description here..."></textarea>
+        </div>
+    </div>
+
+    <div class="btn-row">
+        <button class="btn-match" onclick="matchResume()">Match & Analyze</button>
+        <button class="btn-analyze" onclick="analyzeResume()">Analyze Resume Only</button>
+        <button class="btn-sample" onclick="loadSample()">Load Sample Data</button>
+    </div>
+
+    <div class="results" id="results"></div>
+
+    <script>
+        async function matchResume() {
+            const resume = document.getElementById('resume').value;
+            const jd = document.getElementById('job-desc').value;
+            if (!resume || !jd) { alert('Please enter both resume and job description'); return; }
+
+            const res = await fetch('/api/match', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({resume_text: resume, job_description: jd})
+            });
+            const data = await res.json();
+            showMatchResults(data);
+        }
+
+        async function analyzeResume() {
+            const resume = document.getElementById('resume').value;
+            if (!resume) { alert('Please enter resume text'); return; }
+
+            const res = await fetch('/api/analyze/resume', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({resume_text: resume})
+            });
+            const data = await res.json();
+            showAnalysisResults(data);
+        }
+
+        function showMatchResults(data) {
+            const div = document.getElementById('results');
+            const scoreClass = data.match_score >= 75 ? 'score-high' : data.match_score >= 40 ? 'score-medium' : 'score-low';
+            div.innerHTML = `
+                <div class="score-display">
+                    <div class="score-circle ${scoreClass}">${data.match_score}%</div>
+                </div>
+                <div class="recommendation">${data.recommendation}</div>
+                <div class="skills-section">
+                    <h3>Matched Skills (${data.matched_skills.length})</h3>
+                    ${data.matched_skills.map(s => `<span class="skill-tag tag-matched">${s}</span>`).join('')}
+                </div>
+                <div class="skills-section">
+                    <h3>Missing Skills (${data.missing_skills.length})</h3>
+                    ${data.missing_skills.map(s => `<span class="skill-tag tag-missing">${s.skill} <small>(${s.category})</small></span>`).join('')}
+                </div>
+                <div class="skills-section">
+                    <h3>Extra Skills You Have (${data.extra_skills.length})</h3>
+                    ${data.extra_skills.map(s => `<span class="skill-tag tag-extra">${s}</span>`).join('')}
+                </div>`;
+            div.classList.add('visible');
+        }
+
+        function showAnalysisResults(data) {
+            const div = document.getElementById('results');
+            let categoriesHtml = '';
+            for (const [cat, skills] of Object.entries(data.skills_by_category)) {
+                categoriesHtml += `<div class="skills-section"><h3>${cat.replace('_',' ').toUpperCase()}</h3>
+                    ${skills.map(s => `<span class="skill-tag tag-matched">${s}</span>`).join('')}</div>`;
+            }
+            div.innerHTML = `
+                <div class="score-display">
+                    <div class="score-circle score-high">${data.skills_found}</div>
+                </div>
+                <div class="recommendation">Skills detected across ${Object.keys(data.skills_by_category).length} categories | ${data.word_count} words analyzed</div>
+                ${categoriesHtml}
+                <div class="skills-section">
+                    <h3>Sections Found</h3>
+                    ${data.sections_detected.map(s => `<span class="skill-tag tag-extra">${s}</span>`).join('')}
+                </div>`;
+            div.classList.add('visible');
+        }
+
+        function loadSample() {
+            document.getElementById('resume').value = `John Doe - Software Engineer
+
+SKILLS
+Python, JavaScript, React, Flask, Django, PostgreSQL, MongoDB, Docker, AWS, Git, REST API, HTML, CSS, Node.js, Redis, Linux
+
+EXPERIENCE
+Backend Developer at TechCorp (2022-2024)
+- Built REST APIs with Flask and Django serving 10k+ requests/day
+- Designed PostgreSQL schemas and optimized complex SQL queries
+- Deployed applications on AWS using Docker containers
+
+EDUCATION
+B.Tech Computer Science - IIT Delhi (2018-2022)
+Data Structures, Algorithms, Operating Systems, Database Management`;
+
+            document.getElementById('job-desc').value = `Senior Backend Engineer
+
+Requirements:
+- 3+ years experience with Python and Django/Flask
+- Strong SQL skills with PostgreSQL or MySQL
+- Experience with AWS, Docker, Kubernetes
+- Knowledge of Redis, Elasticsearch
+- RESTful API design
+- CI/CD pipelines, Jenkins
+- Experience with React or Angular frontend
+- Git version control
+- Agile/Scrum methodology`;
+        }
+    </script>
+</body>
+</html>
