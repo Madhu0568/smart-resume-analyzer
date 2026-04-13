@@ -1,0 +1,67 @@
+==============================================================
+  Smart Resume Analyzer — Sample API Output
+==============================================================
+
+--- Analyze resume against a job description ---
+$ curl -X POST http://localhost:5002/api/analyze \
+    -H "Content-Type: application/json" \
+    -d '{
+      "resume_text": "Python Flask REST APIs SQL PostgreSQL Git Docker Linux",
+      "job_description": "Looking for a backend engineer with Python, Flask, PostgreSQL, Redis, Docker, Kubernetes, AWS experience"
+    }'
+
+Response (200):
+{
+  "match_score": 68,
+  "matched_skills": [
+    {"skill": "Python",     "category": "language",  "weight": 10},
+    {"skill": "Flask",      "category": "framework", "weight": 8},
+    {"skill": "PostgreSQL", "category": "database",  "weight": 7},
+    {"skill": "Docker",     "category": "devops",    "weight": 9},
+    {"skill": "SQL",        "category": "database",  "weight": 6}
+  ],
+  "missing_skills": [
+    {"skill": "Redis",      "category": "database", "importance": "high"},
+    {"skill": "Kubernetes", "category": "devops",   "importance": "high"},
+    {"skill": "AWS",        "category": "cloud",    "importance": "medium"}
+  ],
+  "recommendation": "Strong match on core backend skills. Adding Redis and cloud experience would significantly improve fit.",
+  "skill_gap_summary": {
+    "total_required": 8,
+    "matched": 5,
+    "missing": 3
+  }
+}
+
+--- Keyword extraction only ---
+$ curl -X POST http://localhost:5002/api/extract \
+    -H "Content-Type: application/json" \
+    -d '{"text": "Experience with Python, machine learning, TensorFlow, REST APIs, and SQL databases required."}'
+
+Response (200):
+{
+  "skills": [
+    {"skill": "Python",         "category": "language"},
+    {"skill": "machine learning","category": "ml"},
+    {"skill": "TensorFlow",     "category": "framework"},
+    {"skill": "REST APIs",      "category": "backend"},
+    {"skill": "SQL",            "category": "database"}
+  ],
+  "skill_count": 5
+}
+
+--- List all supported skill categories ---
+$ curl http://localhost:5002/api/skills/categories
+
+Response (200):
+{
+  "categories": [
+    {"name": "language",  "weight": 10, "examples": ["Python", "Java", "JavaScript"]},
+    {"name": "framework", "weight": 8,  "examples": ["Flask", "Django", "React"]},
+    {"name": "database",  "weight": 7,  "examples": ["PostgreSQL", "MySQL", "MongoDB", "Redis"]},
+    {"name": "cloud",     "weight": 9,  "examples": ["AWS", "GCP", "Azure"]},
+    {"name": "devops",    "weight": 9,  "examples": ["Docker", "Kubernetes", "CI/CD"]},
+    {"name": "ml",        "weight": 8,  "examples": ["TensorFlow", "PyTorch", "scikit-learn"]},
+    {"name": "tool",      "weight": 5,  "examples": ["Git", "Jira", "Linux"]}
+  ]
+}
