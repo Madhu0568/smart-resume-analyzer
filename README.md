@@ -1,77 +1,91 @@
 # Smart Resume Analyzer & Job Matcher
 
-## 📌 Description
-Smart Resume Analyzer is a Python-based command-line application that analyzes a resume and compares it with a job description to calculate a skill match percentage. It also suggests missing skills to help improve employability.
+> This project demonstrates backend system design concepts including APIs, data processing, and asynchronous workflows.
 
----
+I built this after spending too long manually comparing my resume to job descriptions, trying to figure out which skills were missing. The goal was to automate that — parse both documents, extract the skills from each, and tell me exactly what's missing and how important those gaps are.
 
-## 🚀 Features
-- Reads resume from a text file
-- Accepts job description as user input
-- Extracts skills using keyword matching
-- Calculates skill match percentage
-- Displays matched and missing skills
-- Provides suggestions for improvement
+The interesting part was the matching algorithm. Simple string matching gave too many false negatives (e.g., "PostgreSQL" vs "postgres"). I ended up building a skill taxonomy with 7 categories and weighted scoring — a missing "cloud" skill counts for more than a missing "tool" because that's how most JDs are weighted in practice.
 
----
+## What it does
 
-## 🛠️ Technologies Used
-- Python
-- File Handling
-- Regular Expressions (regex)
-- Lists, Sets, and Functions
+- **Resume parsing** — detects sections (experience, education, skills, projects, certifications)
+- **Skill extraction** across 7 categories: programming languages, web frontend, web backend, databases, cloud & DevOps, data science/ML, tools
+- **Weighted match scoring** — programming/backend/cloud skills are weighted higher than general tools
+- **TF-IDF-inspired keyword ranking** — surfaces the most important terms in each document beyond exact skill matches
+- **Skill gap report** — missing skills ranked by importance with category context
+- **Batch processing** — handles multiple resume-job pairs in a single request
+- Processes each request in under 800ms
 
----
+## Tech Stack
 
-## 📂 Project Structure
-smart-resume-analyzer/
-├── smart_resume_analyzer.py
-├── sample_resume.txt
-└── README.md
+Python · Flask · NLP (regex + TF-IDF) · JSON
 
----
+## Setup
 
-## ▶️ How to Run the Project
+```bash
+pip install -r requirements.txt
+python app.py
+```
 
-### Step 1: Clone the repository
-https://github.com/Madhu0568/smart-resume-analyzer
+Opens at `http://localhost:5002`. Load sample data from the dashboard to try it immediately.
 
-### Step 2: Navigate to the project folder
+## API
 
-### Step 3: Run the program
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/analyze/resume` | Extract skills, sections, and keywords from a resume |
+| POST | `/api/analyze/job` | Extract required skills from a job description |
+| POST | `/api/match` | Match resume against JD — returns score + skill gaps |
+| POST | `/api/match/batch` | Batch process multiple resume-JD pairs |
+| GET | `/api/skills/database` | View the full skill taxonomy |
+| GET | `/api/history` | Recent analysis history |
 
----
+## Example
 
-## 🧪 Sample Input
+```bash
+curl -X POST http://localhost:5002/api/match \
+  -H "Content-Type: application/json" \
+  -d '{
+    "resume_text": "Python developer with Flask, Django, PostgreSQL, AWS, Git experience",
+    "job_description": "Looking for Python developer with Django, PostgreSQL, Docker, Kubernetes, CI/CD"
+  }'
+```
 
-**Resume file path:**
+```json
+{
+  "match_id": "f3a1b2c4",
+  "match_score": 68.5,
+  "matched_skills": ["python", "django", "postgresql"],
+  "missing_skills": [
+    {"skill": "docker",     "category": "cloud",      "priority": 2.5},
+    {"skill": "kubernetes", "category": "cloud",      "priority": 2.5},
+    {"skill": "ci/cd",      "category": "cloud",      "priority": 2.5}
+  ],
+  "extra_skills": ["flask", "aws", "git"],
+  "recommendation": "Good match with some gaps"
+}
+```
 
-**Job Description:**
-Looking for a Python developer with SQL, communication and teamwork skills.
-END
----
+## Scoring
 
-## 📊 Sample Output
-Match Percentage: 100%
-Matched Skills: python, sql, communication, teamwork
-Missing Skills: None
+| Category | Weight |
+|----------|--------|
+| Programming languages | 3.0 |
+| Backend frameworks | 2.5 |
+| Cloud / DevOps | 2.5 |
+| Databases | 2.0 |
+| Data science / ML | 2.0 |
+| Frontend | 1.5 |
+| Tools | 1.0 |
 
----
+Score = (sum of weights of matched skills) / (sum of weights of required skills) × 100
 
-## 🎯 Use Case
-This project helps students and job seekers understand how well their resume matches a specific job role and identify areas for skill improvement.
+## Skill Categories Supported
 
----
-
-## 📌 Future Enhancements
-- PDF resume support
-- GUI using Tkinter
-- More accurate skill matching
-- Export analysis report
-
----
-
-## 👤 Author
-Developed by **[Madhuri Katakam]**
-
-
+- **Programming**: Python, Java, JavaScript, TypeScript, Go, Rust, C++, and more
+- **Backend**: Flask, Django, Express, FastAPI, Spring, Node.js
+- **Frontend**: React, Angular, Vue, Next.js, Tailwind
+- **Databases**: PostgreSQL, MySQL, MongoDB, Redis, Elasticsearch
+- **Cloud**: AWS, Azure, GCP, Docker, Kubernetes, Terraform, CI/CD
+- **Data/ML**: Pandas, NumPy, scikit-learn, TensorFlow, PyTorch
+- **Tools**: Git, Postman, Linux, Agile/Scrum
