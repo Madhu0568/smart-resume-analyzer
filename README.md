@@ -2,11 +2,13 @@
 
 > This project demonstrates backend system design concepts including APIs, data processing, and asynchronous workflows.
 
-I built this after spending too long manually comparing my resume to job descriptions, trying to figure out which skills were missing. The goal was to automate that — parse both documents, extract the skills from each, and tell me exactly what's missing and how important those gaps are.
+## Overview
 
-The interesting part was the matching algorithm. Simple string matching gave too many false negatives (e.g., "PostgreSQL" vs "postgres"). I ended up building a skill taxonomy with 7 categories and weighted scoring — a missing "cloud" skill counts for more than a missing "tool" because that's how most JDs are weighted in practice.
+Parses resumes and job descriptions, extracts skills across 7 categories, and produces a weighted match score with a skill gap report. Built to automate the manual work of comparing a resume to a job description.
 
-## What it does
+Simple string matching gave too many false negatives (e.g., "PostgreSQL" vs "postgres"), so I built a skill taxonomy with weighted scoring — a missing "cloud" skill counts for more than a missing "tool" because that's how most job descriptions are weighted in practice.
+
+## Features
 
 - **Resume parsing** — detects sections (experience, education, skills, projects, certifications)
 - **Skill extraction** across 7 categories: programming languages, web frontend, web backend, databases, cloud & DevOps, data science/ML, tools
@@ -20,7 +22,7 @@ The interesting part was the matching algorithm. Simple string matching gave too
 
 Python · Flask · NLP (regex + TF-IDF) · JSON
 
-## Setup
+## How to Run
 
 ```bash
 pip install -r requirements.txt
@@ -89,3 +91,7 @@ Score = (sum of weights of matched skills) / (sum of weights of required skills)
 - **Cloud**: AWS, Azure, GCP, Docker, Kubernetes, Terraform, CI/CD
 - **Data/ML**: Pandas, NumPy, scikit-learn, TensorFlow, PyTorch
 - **Tools**: Git, Postman, Linux, Agile/Scrum
+
+## Output
+
+See [sample_output.txt](sample_output.txt) for real API request/response examples including resume analysis, skill gap report, keyword extraction, and match scoring.
