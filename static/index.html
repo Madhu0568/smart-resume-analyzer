@@ -48,7 +48,7 @@
     <div class="panel">
       <label for="resume">Resume text</label>
       <textarea id="resume" placeholder="Paste your resume text here..."></textarea>
-      <p class="muted">Paste text copied from your resume. PDF upload is not included in this version.</p>
+      <p class="muted">Paste text copied from your resume. PDF/DOCX parsing is not included yet.</p>
     </div>
     <div class="panel">
       <label for="job">Job description</label>
@@ -58,6 +58,7 @@
   </div>
   <div class="actions">
     <button id="matchButton" onclick="runMatch()">Analyze match</button>
+    <button class="secondary" id="semanticButton" onclick="runSemanticMatch()">Semantic match (optional model)</button>
     <button class="secondary" onclick="loadSample()">Load sample</button>
     <button class="secondary" onclick="showHistory()">View history</button>
   </div>
@@ -141,6 +142,49 @@ async function runMatch() {
       </div>`;
     resultBox.classList.remove("hidden");
     message.textContent = "Analysis completed successfully.";
+    message.className = "muted";
+  } catch (error) {
+    message.textContent = error.message;
+    message.className = "error";
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function runSemanticMatch() {
+  const resume_text = document.getElementById("resume").value.trim();
+  const job_description = document.getElementById("job").value.trim();
+  const message = document.getElementById("message");
+  const button = document.getElementById("semanticButton");
+  const resultBox = document.getElementById("result");
+  if (!resume_text || !job_description) {
+    message.textContent = "Please enter both resume text and job description.";
+    message.className = "error";
+    return;
+  }
+  button.disabled = true;
+  message.textContent = "Loading embedding model and comparing semantic similarity...";
+  message.className = "muted";
+  try {
+    const response = await fetch("/api/match/semantic", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resume_text, job_description })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Semantic analysis failed.");
+    resultBox.innerHTML = `
+      <h2>Semantic analysis</h2>
+      <div class="score">${data.semantic_similarity}%</div>
+      <p>Embedding cosine similarity using ${escapeHtml(data.semantic_model)}</p>
+      <p><strong>Weighted recognized-skill match: ${data.match_score}%</strong></p>
+      <div class="columns">
+        <section><h3>Matched skills</h3>${chips(data.matched_skills)}</section>
+        <section><h3>Missing skills</h3>${chips(data.missing_skills.map(x => x.skill))}</section>
+        <section><h3>Learning recommendations</h3>${data.recommendations.map(x => `<p><strong>${escapeHtml(x.skill)}</strong> (${escapeHtml(x.priority)})<br>${escapeHtml(x.next_step)}</p>`).join("")}</section>
+      </div>`;
+    resultBox.classList.remove("hidden");
+    message.textContent = "Semantic analysis completed.";
     message.className = "muted";
   } catch (error) {
     message.textContent = error.message;
