@@ -1,99 +1,125 @@
 # Smart Resume Analyzer & Job Matcher
 
-A Python + Flask application that compares resume text with a job description, extracts skills, calculates a category-weighted match score, identifies skill gaps, ranks keywords using TF-IDF, and stores analysis history in SQLite.
+A Python + Flask backend application for resume intelligence and job-fit analysis. It combines taxonomy-based skill extraction, transparent weighted scoring, TF-IDF keyword ranking, optional sentence-transformer embeddings, skill-gap recommendations, multi-resume ranking, and SQLite analysis history.
 
-## Features
+## What it does
 
-- Skill extraction across programming, frontend, backend, databases, cloud/DevOps, data science/ML, and tools.
-- Alias-aware matching (for example, PostgreSQL / Postgres and Node.js / NodeJS).
-- Correct boundary handling for names such as C++, C#, and CI/CD.
-- Resume section detection using normalized section headings.
-- TF-IDF keyword extraction using scikit-learn. Text is split into sentence/line chunks so IDF is calculated from document frequency within the supplied text.
-- Weighted match score based on the job description's recognized skills.
-- Matched, missing, and additional skill reports.
-- Batch matching API.
-- SQLite-backed persistent history.
-- Browser dashboard.
-- Request validation and useful HTTP error responses.
+- Extracts recognized skills and aliases across programming, backend/frontend, databases, cloud/DevOps, data/ML, LLM engineering, testing, and developer tools.
+- Detects common resume sections and ranks keywords with TF-IDF.
+- Calculates an explainable category-weighted match score and returns matched, missing, and additional skills.
+- Produces transparent, rule-based skill-gap recommendations with priority and suggested next steps.
+- Ranks up to 50 candidate resumes against one job description.
+- Offers optional semantic similarity using the `all-MiniLM-L6-v2` sentence-transformer model.
+- Provides single and batch analysis APIs, a browser dashboard, and SQLite-backed history.
 
-## Requirements
+## Architecture
 
-- Python 3.10+
-- pip
+```text
+Browser / API Client
+        |
+        v
+     Flask API
+        |
+        +--> Input validation
+        +--> Skill taxonomy + alias matching
+        +--> TF-IDF keyword extraction
+        +--> Weighted scoring + skill-gap recommendations
+        +--> Optional sentence-transformer embeddings
+        |
+        v
+      SQLite
+```
 
 ## Setup
 
+Python 3.10+ is required.
+
 ```bash
-# 1. Open this project folder in VS Code
-# 2. Create a virtual environment
 python -m venv venv
 
 # Windows PowerShell
-.\venv\Scripts\Activate.ps1
+.\\venv\\Scripts\\Activate.ps1
 
 # macOS / Linux
 source venv/bin/activate
 
-# 3. Install dependencies
 pip install -r requirements.txt
-
-# 4. Start the application
 python app.py
 ```
 
-Open http://127.0.0.1:5002 in your browser.
+Open http://127.0.0.1:5002.
 
-The SQLite database `analysis_history.db` is created automatically the first time the app starts. It is local runtime data and should not be committed to GitHub.
+The SQLite database is created automatically on first run. It is local runtime data and should not be committed.
 
-## API endpoints
+## Optional semantic embeddings
+
+The standard app works without downloading an embedding model. To enable the semantic endpoint:
+
+```bash
+pip install -r requirements-embeddings.txt
+```
+
+The first request downloads/loads `sentence-transformers/all-MiniLM-L6-v2`, so the machine needs internet access and sufficient memory for the model. The model is loaded lazily and reused by the running process.
+
+## API reference
 
 | Method | Endpoint | Purpose |
 |---|---|---|
 | GET | `/api/health` | Health check |
 | POST | `/api/analyze/resume` | Extract resume skills, sections, and keywords |
-| POST | `/api/analyze/job` | Extract job skills and keywords |
-| POST | `/api/match` | Compare one resume and job description |
-| POST | `/api/match/batch` | Compare multiple resume/job pairs |
-| GET | `/api/skills/database` | Return supported skill taxonomy |
+| POST | `/api/analyze/job` | Extract job requirements and keywords |
+| POST | `/api/match` | Weighted skill match for one resume |
+| POST | `/api/match/batch` | Match up to 50 resume/job pairs |
+| POST | `/api/match/semantic` | Add sentence-embedding similarity to a match |
+| POST | `/api/rank/resumes` | Rank up to 50 resumes against one job |
+| POST | `/api/recommendations` | Return prioritized skill-gap learning steps |
+| GET | `/api/skills/database` | Return the supported skill taxonomy |
 | GET | `/api/history` | Return recent saved analyses |
 | DELETE | `/api/history` | Clear saved analysis history |
 
-## Example request
+### Example: single match
 
-```bash
-curl -X POST http://127.0.0.1:5002/api/match \
-  -H "Content-Type: application/json" \
-  -d "{\"resume_text\":\"Python SQL Pandas Flask PostgreSQL C++\",\"job_description\":\"Python SQL Pandas Power BI Statistics\"}"
+```json
+{
+  "resume_text": "Python, Flask, SQL, SQLite, Git, REST APIs",
+  "job_description": "Python backend engineer with Flask, PostgreSQL, Docker, REST APIs and pytest"
+}
 ```
 
-## Scoring method
+### Example: rank multiple resumes
 
-The score is:
+```json
+{
+  "job_description": "Python, Flask, SQL, REST APIs, Docker",
+  "resumes": [
+    {"candidate_id": "candidate-A", "resume_text": "Python Flask SQL REST APIs"},
+    {"candidate_id": "candidate-B", "resume_text": "Java Spring SQL"}
+  ]
+}
+```
 
-`(sum of weights for matched required skills / sum of weights for all recognized required skills) * 100`
+### Example: semantic match
 
-Category weights:
-- Programming: 3.0
-- Backend: 2.5
-- Cloud/DevOps: 2.5
-- Databases: 2.0
-- Data science/ML: 2.0
-- Frontend: 1.5
-- Tools: 1.0
+Send the same `resume_text` and `job_description` fields to `POST /api/match/semantic`. If the optional dependency is not installed, the endpoint returns HTTP 503 with installation instructions.
 
-This is a transparent rule-based score, not a prediction of whether an employer will hire a candidate.
+## Scoring and evaluation notes
 
-## TF-IDF method
+The core skill score is:
 
-The app uses scikit-learn's `TfidfVectorizer`. It splits a text into sentence/line chunks and treats those chunks as documents. TF-IDF ranks terms using term frequency and inverse document frequency across those chunks. It is a keyword-ranking feature; it is not a semantic language model.
+`(sum of weights for matched recognized job skills / sum of weights for all recognized job skills) * 100`
 
-## Important limitations
+Category weights are defined in `CATEGORY_WEIGHTS` in `app.py`. The optional semantic endpoint separately reports cosine similarity between normalized sentence embeddings. These are two different signals and should not be interpreted as a hiring probability.
 
-- The app accepts pasted text; it does not extract text from PDF/DOCX files.
-- Skill extraction is taxonomy/dictionary based. A skill not included in the taxonomy may not be detected.
-- Match score depends on the predefined category weights and recognized skills. It is an indicator, not a hiring probability.
-- Section detection expects recognizable headings.
-- Keyword ranking depends on sentence/line segmentation and the supplied text.
+The multi-resume ranking endpoint currently sorts by the category-weighted recognized-skill score. It does not claim to predict hiring outcomes.
+
+## Limitations
+
+- The current UI/API accepts pasted text; it does not parse PDF or DOCX files.
+- Skill extraction is based on a maintained taxonomy and may miss unlisted skills or context-dependent mentions.
+- Recommendations are deterministic templates, not generated by an LLM.
+- The standard weighted score is based on recognized skills and configured category weights.
+- Semantic similarity is optional and requires downloading a pretrained model.
+- The app does not currently implement an LLM agent, RAG pipeline, or external vector database.
 
 ## Tests
 
@@ -102,8 +128,6 @@ python -m unittest discover -s tests -v
 ```
 
 ## Git hygiene
-
-Add the following to `.gitignore` so local runtime files are not committed:
 
 ```gitignore
 venv/
