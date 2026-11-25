@@ -35,6 +35,35 @@ class ResumeAnalyzerTests(unittest.TestCase):
         self.assertIn("education", sections)
         self.assertIn("skills", sections)
 
+    def test_elip_llm_skills_are_recognized(self):
+        skills = analyzer.extract_skills("Built RAG pipelines with LangChain, embeddings, vector databases, prompt engineering and tool calling.")
+        for skill in ["rag", "langchain", "embeddings", "vector databases", "prompt engineering", "tool calling"]:
+            self.assertIn(skill, skills)
+
+    def test_rank_resumes_endpoint_orders_candidates(self):
+        client = analyzer.app.test_client()
+        response = client.post("/api/rank/resumes", json={
+            "job_description": "Python Flask SQL REST APIs Docker",
+            "resumes": [
+                {"candidate_id": "weaker", "resume_text": "Java Spring"},
+                {"candidate_id": "stronger", "resume_text": "Python Flask SQL REST APIs Docker"}
+            ]
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["results"][0]["candidate_id"], "stronger")
+        self.assertEqual(payload["results"][0]["rank"], 1)
+
+    def test_recommendations_endpoint_returns_skill_gaps(self):
+        client = analyzer.app.test_client()
+        response = client.post("/api/recommendations", json={
+            "resume_text": "Python Flask",
+            "job_description": "Python Flask Docker PostgreSQL"
+        })
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertTrue(payload["learning_recommendations"])
+
     def test_tfidf_returns_dictionary(self):
         result = analyzer.extract_tfidf_keywords(
             "Python is useful for data analysis. SQL is used for querying databases."
