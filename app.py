@@ -119,6 +119,8 @@ CATEGORY_WEIGHTS = {
     "databases": 2.0,
     "data_science_ml": 2.0,
     "web_frontend": 1.5,
+    "llm_ai_engineering": 3.0,
+    "testing": 1.5,
     "tools": 1.0,
 }
 
@@ -498,6 +500,120 @@ def clear_history():
     with database_connection() as connection:
         connection.execute("DELETE FROM analysis_history")
     return jsonify({"message": "Analysis history cleared"})
+
+
+# Optional semantic matching uses sentence-transformers embeddings.
+# The dependency and model are loaded only when this endpoint is requested.
+_embedding_model = None
+
+def get_embedding_model():
+    global _embedding_model
+    if _embedding_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as error:
+            raise RuntimeError(
+                "Semantic embeddings are optional. Install them with: "
+                "pip install -r requirements-embeddings.txt"
+            ) from error
+        _embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    return _embedding_model
+
+def build_skill_recommendations(missing_skills: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Create transparent, rule-based next steps from recognized skill gaps."""
+    recommendations = []
+    for item in missing_skills:
+        skill = item["skill"]
+        category = item["category"]
+        recommendations.append({
+            "skill": skill,
+            "priority": "high" if item["priority"] >= 2.5 else "medium" if item["priority"] >= 1.5 else "low",
+            "reason": f"{skill} is listed in the job description under {category.replace('_', ' ')}.",
+            "next_step": f"Study {skill}, build a small hands-on implementation, and add a verifiable project example."
+        })
+    return recommendations
+
+@app.post("/api/match/semantic")
+def semantic_match_resume_to_job():
+    """Compare a resume and job description with sentence embeddings."""
+    data = request.get_json(silent=True) or {}
+    try:
+        resume_text = validate_text(data.get("resume_text"), "resume_text")
+        job_description = validate_text(data.get("job_description"), "job_description")
+        model = get_embedding_model()
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    except RuntimeError as error:
+        return jsonify({"error": str(error)}), 503
+
+    import numpy as np
+    vectors = model.encode([resume_text, job_description], normalize_embeddings=True)
+    similarity = float(np.dot(vectors[0], vectors[1]))
+    similarity = max(-1.0, min(1.0, similarity))
+    result = calculate_match(resume_text, job_description)
+    result["semantic_similarity"] = round(similarity * 100, 2)
+    result["semantic_model"] = "sentence-transformers/all-MiniLM-L6-v2"
+    result["recommendations"] = build_skill_recommendations(result["missing_skills"])
+    return jsonify(result)
+
+@app.post("/api/rank/resumes")
+def rank_resumes_for_job():
+    """Rank multiple resume texts against one job description."""
+    data = request.get_json(silent=True) or {}
+    try:
+        job_description = validate_text(data.get("job_description"), "job_description")
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+
+    resumes = data.get("resumes")
+    if not isinstance(resumes, list) or not resumes:
+        return jsonify({"error": "resumes must be a non-empty array"}), 400
+    if len(resumes) > MAX_BATCH_SIZE:
+        return jsonify({"error": f"Maximum number of resumes is {MAX_BATCH_SIZE}"}), 400
+
+    ranked = []
+    for index, item in enumerate(resumes):
+        if isinstance(item, dict):
+            resume_text = item.get("resume_text")
+            candidate_id = str(item.get("candidate_id", index + 1))
+        else:
+            resume_text = item
+            candidate_id = str(index + 1)
+        try:
+            resume_text = validate_text(resume_text, f"resumes[{index}].resume_text")
+        except ValueError as error:
+            return jsonify({"error": str(error)}), 400
+        result = calculate_match(resume_text, job_description)
+        result["candidate_id"] = candidate_id
+        result["recommendations"] = build_skill_recommendations(result["missing_skills"])
+        ranked.append(result)
+
+    ranked.sort(key=lambda item: (-item["match_score"], item["candidate_id"]))
+    for rank, item in enumerate(ranked, start=1):
+        item["rank"] = rank
+    return jsonify({
+        "total": len(ranked),
+        "ranking_method": "category-weighted recognized-skill overlap",
+        "results": ranked
+    })
+
+@app.post("/api/recommendations")
+def get_skill_gap_recommendations():
+    data = request.get_json(silent=True) or {}
+    try:
+        resume_text = validate_text(data.get("resume_text"), "resume_text")
+        job_description = validate_text(data.get("job_description"), "job_description")
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    result = calculate_match(resume_text, job_description)
+    return jsonify({
+        "match_score": result["match_score"],
+        "recommendation": result["recommendation"],
+        "matched_skills": result["matched_skills"],
+        "missing_skills": result["missing_skills"],
+        "learning_recommendations": build_skill_recommendations(result["missing_skills"]),
+        "method": "rule-based recommendations from the configured skill taxonomy and category weights"
+    })
 
 initialize_database()
 
